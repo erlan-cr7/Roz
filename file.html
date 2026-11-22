@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jogo da Cobra</title>
+<style>
+  body {
+    margin: 0; background: #1e1e2e; color: #fff;
+    font-family: Arial, sans-serif;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; user-select: none;
+  }
+  h1 { margin: 10px; font-size: 28px; }
+  canvas { background: #11111b; border: 3px solid #89b4fa; border-radius: 8px; max-width: 90vw; }
+  #placar { font-size: 20px; margin: 8px; }
+  .controles { display: grid; grid-template-columns: repeat(3, 70px); gap: 8px; margin-top: 12px; }
+  .controles button {
+    padding: 14px; font-size: 22px; border: none; border-radius: 8px;
+    background: #89b4fa; color: #1e1e2e; cursor: pointer;
+  }
+  .vazio { visibility: hidden; }
+</style>
+</head>
+<body>
+<h1>Jogo da Cobra</h1>
+<div id="placar">Pontos: <span id="pontos">0</span> | Recorde: <span id="recorde">0</span></div>
+<canvas id="tela" width="400" height="400"></canvas>
+
+<div class="controles">
+  <div class="vazio"></div>
+  <button onclick="mudar(0,-1)">▲</button>
+  <div class="vazio"></div>
+  <button onclick="mudar(-1,0)">◀</button>
+  <button onclick="mudar(0,1)">▼</button>
+  <button onclick="mudar(1,0)">▶</button>
+</div>
+
+<script>
+const canvas = document.getElementById("tela");
+const ctx = canvas.getContext("2d");
+const TAMANHO = 20;
+const COLUNAS = canvas.width / TAMANHO;
+const LINHAS = canvas.height / TAMANHO;
+const CHAVE_RECORDE = "recordeCobra";
+
+let cobra, direcao, proximaDirecao, comida, pontos, fimDeJogo, intervalo;
+let recorde = Number(localStorage.getItem(CHAVE_RECORDE)) || 0;
+
+function atualizarPlacar() {
+  document.getElementById("pontos").textContent = pontos;
+  document.getElementById("recorde").textContent = recorde;
+}
+
+// Quanto mais pontos, menor o intervalo entre movimentos (mais rápido)
+function velocidade() {
+  return Math.max(50, 120 - pontos * 4);
+}
+
+function iniciar() {
+  cobra = [{x: 10, y: 10}, {x: 9, y: 10}, {x: 8, y: 10}];
+  direcao = {x: 1, y: 0};
+  proximaDirecao = {x: 1, y: 0};
+  pontos = 0;
+  fimDeJogo = false;
+  comida = novaComida();
+  atualizarPlacar();
+  clearInterval(intervalo);
+  intervalo = setInterval(atualizar, velocidade());
+}
+
+function novaComida() {
+  let pos;
+  do {
+    pos = {x: Math.floor(Math.random() * COLUNAS), y: Math.floor(Math.random() * LINHAS)};
+  } while (cobra.some(p => p.x === pos.x && p.y === pos.y));
+  return pos;
+}
+
+function mudar(dx, dy) {
+  // Impede a cobra de virar para trás sobre si mesma
+  if (dx === -direcao.x && dy === -direcao.y) return;
+  proximaDirecao = {x: dx, y: dy};
+}
+
+function fimDoJogo() {
+  fimDeJogo = true;
+  clearInterval(intervalo);
+
+  if (pontos > recorde) {
+    recorde = pontos;
+    localStorage.setItem(CHAVE_RECORDE, recorde);
+    atualizarPlacar();
+  }
+
+  desenhar();
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  ctx.font = "bold 28px Arial";
+  ctx.fillText("Fim de jogo!", canvas.width / 2, canvas.height / 2 - 10);
+  ctx.font = "18px Arial";
+  ctx.fillText("Aperte ESPAÇO ou toque na tela para recomeçar", canvas.width / 2, canvas.height / 2 + 20);
+}
+
+function atualizar() {
+  if (fimDeJogo) return;
+  direcao = proximaDirecao;
+  const cabeca = {x: cobra[0].x + direcao.x, y: cobra[0].y + direcao.y};
+
+  const bateuParede = cabeca.x < 0 || cabeca.y < 0 || cabeca.x >= COLUNAS || cabeca.y >= LINHAS;
+  const bateuCorpo = cobra.some(p => p.x === cabeca.x && p.y === cabeca.y);
+  if (bateuParede || bateuCorpo) {
+    fimDoJogo();
+    return;
+  }
+
+  cobra.unshift(cabeca);
+  if (cabeca.x === comida.x && cabeca.y === comida.y) {
+    pontos++;
+    atualizarPlacar();
+    comida = novaComida();
+    // Reinicia o intervalo com a nova velocidade
+    clearInterval(intervalo);
+    intervalo = setInterval(atualizar, velocidade());
+  } else {
+    cobra.pop();
+  }
+  desenhar();
+}
+
+function desenhar() {
+  ctx.fillStyle = "#11111b";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "#f38ba8";
+  ctx.beginPath();
+  ctx.arc(comida.x * TAMANHO + TAMANHO / 2, comida.y * TAMANHO + TAMANHO / 2, TAMANHO / 2 - 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  cobra.forEach((p, i) => {
+    ctx.fillStyle = i === 0 ? "#a6e3a1" : "#94e2d5";
+    ctx.fillRect(p.x * TAMANHO + 1, p.y * TAMANHO + 1, TAMANHO - 2, TAMANHO - 2);
+  });
+}
+
+document.addEventListener("keydown", e => {
+  const teclas = {
+    ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0]
+  };
+  if (teclas[e.key]) {
+    e.preventDefault();
+    mudar(...teclas[e.key]);
+  } else if (e.key === " " && fimDeJogo) {
+    iniciar();
+  }
+});
+
+// Toque na tela para recomeçar depois do fim de jogo (útil no celular)
+canvas.addEventListener("click", () => {
+  if (fimDeJogo) iniciar();
+});
+
+iniciar();
+</script>
+</body>
+</html>
